@@ -1,0 +1,46 @@
+import groovy.json.*
+
+def openPath = System.getenv("OPENWHISK_HOME") ?: '../../../../open'
+def openCLIBasePath = "${openPath}/tools/cli"
+def langResBackUp = "${openCLIBasePath}/go-whisk-cli/wski18n/resources/en_US.all.json.bk"
+def langResOrig = "${openCLIBasePath}/go-whisk-cli/wski18n/resources/en_US.all.json"
+
+task distDocker(type: GradleBuild) {
+    buildFile = "${openCLIBasePath}/build.gradle"
+    tasks = ['distDocker']
+}
+
+distDocker.doLast {
+    file(langResBackUp).renameTo(file(langResOrig))
+    file("${openCLIBasePath}/go-whisk-cli/commands/bmx.go").delete()
+    file("${openCLIBasePath}/go-whisk/whisk/bmx.go").delete()
+}
+
+task copyGoSource(type: Copy) {
+    include '**/*.go'
+    from projectDir
+    into openCLIBasePath
+}
+
+task mergeExternalizedStrings() {
+    file(langResOrig).renameTo(file(langResBackUp))
+
+    def openJSONFile = file(langResBackUp)
+    def mergedJSONFile = file(langResOrig)
+    def blueJSONFile = file("${projectDir}/go-whisk-cli/wski18n/resources/en_US.all.json")
+    def openJSON = new groovy.json.JsonSlurper().parseText(openJSONFile.text)
+    def blueJSON = new groovy.json.JsonSlurper().parseText(blueJSONFile.text)
+
+    blueJSON.each {
+        value -> openJSON << value
+    }
+
+    def mergedJSON = new JsonBuilder(openJSON).toPrettyString()
+
+    mergedJSONFile.withWriter('UTF-8') {
+        it << mergedJSON
+    }
+}
+
+distDocker.dependsOn mergeExternalizedStrings
+distDocker.dependsOn copyGoSource
