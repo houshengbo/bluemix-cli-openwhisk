@@ -8,6 +8,19 @@ def langResOrig = "${openCLIBasePath}/go-whisk-cli/wski18n/resources/en_US.all.j
 task distDocker(type: GradleBuild) {
     buildFile = "${openCLIBasePath}/build.gradle"
     tasks = ['distDocker']
+    startParameter.projectProperties = gradle.startParameter.projectProperties
+}
+
+task tagImage(type: GradleBuild) {
+    buildFile = "${openCLIBasePath}/build.gradle"
+    tasks = ['tagImage']
+    startParameter.projectProperties = gradle.startParameter.projectProperties
+}
+
+task pushImage(type: GradleBuild) {
+    buildFile = "${openCLIBasePath}/build.gradle"
+    tasks = ['pushImage']
+    startParameter.projectProperties = gradle.startParameter.projectProperties
 }
 
 distDocker.doLast {
@@ -28,8 +41,8 @@ task mergeExternalizedStrings() {
     def openJSONFile = file(langResBackUp)
     def mergedJSONFile = file(langResOrig)
     def blueJSONFile = file("${projectDir}/go-whisk-cli/wski18n/resources/en_US.all.json")
-    def openJSON = new groovy.json.JsonSlurper().parseText(openJSONFile.text)
-    def blueJSON = new groovy.json.JsonSlurper().parseText(blueJSONFile.text)
+    def openJSON = new JsonSlurper().parseText(openJSONFile.text)
+    def blueJSON = new JsonSlurper().parseText(blueJSONFile.text)
 
     blueJSON.each {
         value -> openJSON << value
