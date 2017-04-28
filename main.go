@@ -23,10 +23,10 @@ import (
     goi18n "github.com/nicksnyder/go-i18n/i18n"
     "github.com/fatih/color"
 
-    "github.com/openwhisk/openwhisk-client-go/whisk"
-    "github.com/openwhisk/openwhisk-cli/commands"
+    "github.com/apache/incubator-openwhisk-client-go/whisk"
+    "github.com/apache/incubator-openwhisk-cli/commands"
     bmcomm "github.com/IBM-Bluemix/bluemix-cli-openwhisk/go-whisk-cli/commands"
-    "github.com/openwhisk/openwhisk-cli/wski18n"
+    "github.com/apache/incubator-openwhisk-cli/wski18n"
     "github.com/mattn/go-colorable"
 )
 

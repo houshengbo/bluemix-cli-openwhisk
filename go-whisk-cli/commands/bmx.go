@@ -20,24 +20,43 @@ import (
     "errors"
     "fmt"
 
-    "github.com/openwhisk/openwhisk-client-go/whisk"
+    "github.com/apache/incubator-openwhisk-client-go/whisk"
     whisk_bluemix "github.com/IBM-Bluemix/bluemix-cli-openwhisk/go-whisk/whisk"
-    "github.com/openwhisk/openwhisk-cli/commands"
+    "github.com/apache/incubator-oopenwhisk-cli/commands"
     "github.com/IBM-Bluemix/bluemix-cli-openwhisk/go-whisk-cli/wski18n"
 
     "github.com/fatih/color"
     "github.com/spf13/cobra"
+    "github.com/mitchellh/go-homedir"
+
     "net/http"
     "net/url"
     "strconv"
+    "encoding/json"
+    "strings"
 )
 
 var bmxflags struct {
     username   string
     password   string
     namespace  string
+    sso        bool
 }
 
+// Structs for parsing the Cloud Foundry config.json
+type CloudFoundryConfigJson struct {
+    AccessToken     string    `json:"AccessToken"`
+    RefreshToken    string    `json:"RefreshToken"`
+    Org             *CfOrg    `json:"OrganizationFields"`
+    Space           *CfSpace  `json:"SpaceFields"`
+}
+type CfOrg struct {
+    Name            string    `json:"Name"`
+}
+type CfSpace struct {
+    Namespace       string    `json:"Name"`
+    Guid            string    `json:"GUID"`
+}
 
 //////////////
 // Commands //
@@ -49,7 +68,7 @@ var bmxCmd = &cobra.Command{
 }
 
 var bmxLoginCmd = &cobra.Command{
-    Use:           "login --user BMX_USER_NAME --password BMX_USER_PASSWORD [--namespace NAMESPACE]",
+    Use:           "login ( (--user BMX_USER_NAME --password BMX_USER_PASSWORD) | --sso ) [--namespace NAMESPACE]",
     Short:         wski18n.T("login to Bluemix"),
     SilenceUsage:  true,
     SilenceErrors: true,
@@ -57,10 +76,10 @@ var bmxLoginCmd = &cobra.Command{
     RunE: func(cmd *cobra.Command, args []string) error {
 
         // 0. Validate command arguments
-        whisk.Debug(whisk.DbgInfo, "bmxflags: %+v\n", bmxflags)
-        if !(cmd.LocalFlags().Changed("user") && cmd.LocalFlags().Changed("password")) {
-            errMsg := wski18n.T("User name and/or password were not specified")
-            whiskErr := whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_NETWORK, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+        err := validateArgs(cmd, args)
+        if err != nil {
+            errMsg := wski18n.T("Invalid args: {{.err}}", map[string]interface{}{"err": err})
+            whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK, whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
             return whiskErr
         }
 
@@ -92,21 +111,41 @@ var bmxLoginCmd = &cobra.Command{
             return generateBluemixAuthEndpointAccessError(err)
         }
 
-        // 3. Query the Bluemix UAA endpoint for the user's Bluemix access/bearer token
-        whisk.Debug(whisk.DbgInfo, "Bluemix client baseURL: %s\n", whisk_bluemix.BmxService.BmxClient.BaseURL)
-        reqAuthToken := &whisk_bluemix.AuthTokenRequest{
-            UserName: bmxflags.username,
-            UserPassword: bmxflags.password,
-            GrantType: "password",
-            ResponseType: "token",
-        }
-        respAuthToken, _, err := whisk_bluemix.BmxService.GetBmxAuthToken(reqAuthToken)
-        if err != nil {
-            whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxAuthToken(%s) error: %s\n", respBmxInfo.AuthEndpoint, err)
-            errMsg := wski18n.T("Unable to authenticate with Bluemix: {{.err}}", map[string]interface{}{"err": err})
-            whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK,
-                whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
-            return whiskErr
+        // 3. Obtain the user's Bluemix access/bearer token
+        //    If the --sso option was specified, obtain the token from the bluemix cli config.json;
+        //    otherwise, query the Bluemix UAA endpoint for the access token
+        var respAuthToken *whisk.AuthTokenResponse
+        if (bmxflags.sso) {
+            // Obtain needed config.json properties
+            whisk.Debug(whisk.DbgInfo, "Obtaining access token from CF config.json\n")
+            cfCfg, err := getCfConfig()
+            if err != nil {
+                whisk.Debug(whisk.DbgError, "getCfConfig error: %s\n", err)
+                errMsg := wski18n.T("Unable to authenticate with Bluemix: {{.err}}", map[string]interface{}{"err": err})
+                whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK,
+                    whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+                return whiskErr
+            }
+            // Use these user tokens fpr the remainder of the login process
+            respAuthToken = &whisk.AuthTokenResponse{}
+            respAuthToken.AccessToken = cfCfg.AccessToken
+            respAuthToken.RefreshToken = cfCfg.RefreshToken
+        } else {
+            whisk.Debug(whisk.DbgInfo, "Bluemix client baseURL: %s\n", whisk.BmxService.BmxClient.BaseURL)
+            reqAuthToken := &whisk.AuthTokenRequest{
+                UserName: bmxflags.username,
+                UserPassword: bmxflags.password,
+                GrantType: "password",
+                ResponseType: "token",
+            }
+            respAuthToken, _, err = whisk.BmxService.GetBmxAuthToken(reqAuthToken)
+            if err != nil {
+                whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxAuthToken(%s) error: %s\n", respBmxInfo.AuthEndpoint, err)
+                errMsg := wski18n.T("Unable to authenticate with Bluemix: {{.err}}", map[string]interface{}{"err": err})
+                whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK,
+                    whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+                return whiskErr
+            }
         }
         whisk.Debug(whisk.DbgInfo, "Bluemix access token: %#v\n", respAuthToken)
 
@@ -172,14 +211,44 @@ var bmxLoginCmd = &cobra.Command{
             return whiskErr
         }
 
-        fmt.Fprintf(color.Output,
+        // If user name explicitly specified, use it in the exit message
+        // If the --sso option was used, don't rely on the CLI user name; use the sso provide one
+        var userName = bmxflags.username
+        if bmxflags.sso {
+            userName = respBmxNamespaces.Subject
+        }
+        fmt.Fprintln(color.Output,
             wski18n.T("{{.ok}} User '{{.user}}' logged into Bluemix",
                 map[string]interface{}{
                     "ok": color.GreenString("ok:"),
-                    "user": bmxflags.username,
+                    "user": userName,
                 }))
+
         return nil
     },
+}
+
+/*
+ * Validate `wsk bluemix login` arguments
+ */
+func validateArgs(cmd *cobra.Command, args []string) (whiskError error) {
+    whisk.Debug(whisk.DbgInfo, "bmxflags: %+v\n", bmxflags)
+
+    // When --sso is NOT specified, a user/password must be provided
+    if !cmd.LocalFlags().Changed("sso") && !(cmd.LocalFlags().Changed("user") && cmd.LocalFlags().Changed("password")) {
+        errMsg := wski18n.T("User name and/or password were not specified")
+        whiskErr := whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_NETWORK, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+        return whiskErr
+    }
+
+    // When --sso IS provided, a user or password must NOT be provided
+    if cmd.LocalFlags().Changed("sso") && (cmd.LocalFlags().Changed("user") || cmd.LocalFlags().Changed("password")) {
+        errMsg := wski18n.T("When the --sso option is used, do not specify a user name or password")
+        whiskErr := whisk.MakeWskError(errors.New(errMsg), whisk.EXITCODE_ERR_NETWORK, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+        return whiskErr
+    }
+
+    return nil
 }
 
 /*
@@ -251,6 +320,53 @@ func setupBmxClientConfig(bmxHost string) (*whisk.Client, error){
     return bmxClient, nil
 }
 
+// Read the user's bluemix or cf generated config.json
+// If present, the file is located under the user's HOMEDIR
+func getCfConfig() (*CloudFoundryConfigJson, error) {
+    const bmxcfPath = "~/.bluemix/.cf/config.json"
+
+    // Generate a path to the config.json file
+    bmxcfConfigFullPath, err := homedir.Expand(bmxcfPath)
+    if err != nil {
+        whisk.Debug(whisk.DbgError, "homedir.Expand(%s) failed: %s\n", Properties.PropsFile, err)
+        errStr := fmt.Sprintf(
+            wski18n.T("Unable to locate config file '{{.filename}}': {{.err}}",
+                map[string]interface{}{"filename": bmxcfPath, "err": err}))
+        whiskErr := whisk.MakeWskError(errors.New(errStr), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+        return nil, whiskErr
+    }
+
+    cfConfig, err:= readFile(bmxcfConfigFullPath)
+    if ( err != nil ) {
+        whisk.Debug(whisk.DbgError, "readFile(%s) error: %s\n", bmxcfConfigFullPath, err)
+        errMsg := wski18n.T("Error reading config file '{{.name}}': {{.err}}",
+            map[string]interface{}{"name": bmxcfConfigFullPath, "err": err})
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+            whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
+        return nil, whiskErr
+    }
+
+    // Parse the JSON into a cf config object
+    cfConfigObj := new(CloudFoundryConfigJson)
+    err = json.Unmarshal([]byte(cfConfig), cfConfigObj)
+    if ( err != nil ) {
+        whisk.Debug(whisk.DbgError, "JSON parse of `%s' error: %s\n", bmxcfConfigFullPath, err)
+        errMsg := wski18n.T("Error parsing config file '{{.name}}': {{.err}}",
+            map[string]interface{}{"name": bmxcfConfigFullPath, "err": err})
+        whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
+            whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
+        return nil, whiskErr
+    }
+
+    // Remove any existing "bearer " prefix from the access token
+    strArr := strings.Split(cfConfigObj.AccessToken, " ")
+    if len(strArr) > 1 {
+        cfConfigObj.AccessToken = strArr[1]
+    }
+
+    return cfConfigObj, nil
+}
+
 func makeURL(host string) (*url.URL, error)  {
     if len(host) == 0 {
         errMsg := wski18n.T("An API host must be provided.")
@@ -311,6 +427,7 @@ func init() {
     bmxLoginCmd.Flags().StringVar(&bmxflags.username, "user", "", wski18n.T("Bluemix user `NAME`"))
     bmxLoginCmd.Flags().StringVar(&bmxflags.password, "password", "", wski18n.T("Bluemix user `PASSWORD`"))
     bmxLoginCmd.Flags().StringVar(&bmxflags.namespace, "namespace", "", wski18n.T("OpenWhisk `NAMESPACE`"))
+    bmxLoginCmd.Flags().BoolVar(&bmxflags.sso, "sso", false, wski18n.T("Use 'bluemix login --sso' access token"))
 
     bmxCmd.AddCommand(
         bmxLoginCmd,

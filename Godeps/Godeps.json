@@ -74,20 +74,20 @@
       "Rev": "e4d366fc3c7938e2958e662b4258c7a89e1f0e3e"
     },
     {
-      "ImportPath": "github.com/openwhisk/openwhisk-client-go/whisk",
+      "ImportPath": "github.com/apache/incubator-openwhisk-client-go/whisk",
       "Rev": "62ddca28397566aaa46ac06484d79bd6da74011f"
     },
     {
-      "ImportPath": "github.com/openwhisk/openwhisk-client-go/wski18n",
+      "ImportPath": "github.com/apache/incubator-openwhisk-client-go/wski18n",
       "Rev": "62ddca28397566aaa46ac06484d79bd6da74011f"
     },
     {
-      "ImportPath": "github.com/openwhisk/openwhisk-cli/commands",
-      "Rev": "a3447bf2550a97dc828c401acf5f51b4f24f1dc9"
+      "ImportPath": "github.com/apache/incubator-openwhisk-cli/commands",
+      "Rev": "a6aff84fa1a1c152b7954792a91af95cfdbe41e6"
     },
     {
-      "ImportPath": "github.com/openwhisk/openwhisk-cli/wski18n",
-      "Rev": "a3447bf2550a97dc828c401acf5f51b4f24f1dc9"
+      "ImportPath": "github.com/apache/incubator-openwhisk-cli/wski18n",
+      "Rev": "a6aff84fa1a1c152b7954792a91af95cfdbe41e6"
     }
   ]
 }

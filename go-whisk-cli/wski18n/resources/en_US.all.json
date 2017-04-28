@@ -78,5 +78,25 @@
     {
         "id": "User '{{.name}}' must have at least one defined namespace",
         "translation": "User '{{.name}}' must have at least one defined namespace"
+    },
+    {
+        "id": "When the --sso option is used, do not specify a user name or password",
+        "translation":"When the --sso option is used, do not specify a user name or password"
+    },
+    {
+        "id": "Invalid args: {{.err}}",
+        "translation": "Invalid args: {{.err}}"
+    },
+    {
+        "id": "Unable to locate config file '{{.filename}}': {{.err}}",
+        "translation": "Unable to locate config file '{{.filename}}': {{.err}}"
+    },
+    {
+        "id": "Error reading config file '{{.name}}': {{.err}}",
+        "translation": "Error reading config file '{{.name}}': {{.err}}"
+    },
+    {
+        "id": "Error parsing config file '{{.name}}': {{.err}}",
+        "translation": "Error parsing config file '{{.name}}': {{.err}}"
     }
 ]

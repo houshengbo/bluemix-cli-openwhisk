@@ -20,8 +20,10 @@ import (
     "net/http"
     "errors"
     "net/url"
-    "github.com/openwhisk/openwhisk-client-go/whisk"
-    "github.com/openwhisk/openwhisk-client-go/wski18n"
+    "github.com/apache/incubator-openwhisk-client-go/whisk"
+    "github.com/apache/incubator-openwhisk-client-go/wski18n"
+    "encoding/json"
+    "io/ioutil"
 )
 
 var BmxService = &BluemixService{}
@@ -62,6 +64,10 @@ type AuthTokenResponse struct {
     JTI             string    `json:"jti"`
     Scope           string    `json:"scope`
     TokenType       string    `json:"token_type"`
+}
+type AuthTokenErrorResponse struct {
+    ErrDescription  string    `json:"error_description"`
+    Error           string    `json:"error"`
 }
 
 type BmxNamespacesRequest struct {
@@ -162,7 +168,22 @@ func (s *BluemixService) GetBmxAuthToken(requestAuthToken *AuthTokenRequest) (*A
     respAuthToken := new(AuthTokenResponse)
     resp, err := s.BmxClient.Do(req, &respAuthToken, whisk.ExitWithErrorOnTimeout)
     if err != nil {
-        whisk.Debug(whisk.DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
+        // Before accepting the generic error response, try parsing the error into a target specific error
+        respErr, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            Debug(DbgError, "ioutil.ReadAll(resp.Body) error: %s\n", err)
+            werr := MakeWskError(err, EXITCODE_ERR_NETWORK, DISPLAY_MSG, NO_DISPLAY_USAGE)
+            return nil, resp, werr
+        }
+        Verbose("Auth token error response body received:\n%s\n", string(respErr))
+        authErrorResponse := &AuthTokenErrorResponse{}
+        err = json.Unmarshal(respErr, authErrorResponse)
+        if err == nil {
+            Debug(DbgInfo, "AuthTokenErrorResponse: %+v\n", authErrorResponse)
+            whiskErr := MakeWskError(errors.New(authErrorResponse.ErrDescription), resp.StatusCode - 256, DISPLAY_MSG, NO_DISPLAY_USAGE)
+            return nil, resp, whiskErr
+        }
+        Debug(DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
         return nil, resp, err
     }
 
