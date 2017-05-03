@@ -20,8 +20,10 @@ import (
     "errors"
     "fmt"
 
-    "../../go-whisk/whisk"
-    "../wski18n"
+    "github.com/openwhisk/openwhisk-client-go/whisk"
+    whisk_bluemix "github.com/IBM-Bluemix/bluemix-cli-openwhisk/go-whisk/whisk"
+    "github.com/openwhisk/openwhisk-cli/commands"
+    "github.com/IBM-Bluemix/bluemix-cli-openwhisk/go-whisk-cli/wski18n"
 
     "github.com/fatih/color"
     "github.com/spf13/cobra"
@@ -63,14 +65,14 @@ var bmxLoginCmd = &cobra.Command{
         }
 
         // 1. Query OpenWhisk for the Bluemix API endpoint
-        reqBmxEndpoint := new(whisk.BmxEndpointRequest)
-        respBmxEndpoint, _, err := whisk.BmxService.GetBmxApiHost(reqBmxEndpoint)
+        reqBmxEndpoint := new(whisk_bluemix.BmxEndpointRequest)
+        respBmxEndpoint, _, err := whisk_bluemix.BmxService.GetBmxApiHost(reqBmxEndpoint)
         if err != nil {
             whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxApiHost(%#v, false) error: %s\n", reqBmxEndpoint, err)
             return generateBluemixApiHostAccessError(err)
         }
         whisk.Debug(whisk.DbgInfo, "Bluemix API: %s\n", respBmxEndpoint.BmxApi)
-        whisk.BmxService.BmxClient, err = setupBmxClientConfig(respBmxEndpoint.BmxApi)
+        whisk_bluemix.BmxService.BmxClient, err = setupBmxClientConfig(respBmxEndpoint.BmxApi)
         if err != nil {
             whisk.Debug(whisk.DbgError, "setupBmxClientConfig(%s) error: %s\n", respBmxEndpoint.BmxApi, err)
             return generateBluemixApiHostAccessError(err)
@@ -78,27 +80,27 @@ var bmxLoginCmd = &cobra.Command{
 
         // 2. Query the Bluemix API endpoint for the Bluemix UAA endpoint
         bmxApiUrl := fmt.Sprintf("https://%s/v2/info", respBmxEndpoint.BmxApi)
-        respBmxInfo, _, err := whisk.BmxService.GetBmxInfo(bmxApiUrl)
+        respBmxInfo, _, err := whisk_bluemix.BmxService.GetBmxInfo(bmxApiUrl)
         if err != nil {
             whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxInfo(%s) error: %s\n", bmxApiUrl, err)
             return generateBluemixAuthEndpointAccessError(err)
         }
         whisk.Debug(whisk.DbgInfo, "Bluemix authorization endpoint: %s\n", respBmxInfo.AuthEndpoint)
-        whisk.BmxService.BmxClient, err = setupBmxClientConfig(respBmxInfo.AuthEndpoint)
+        whisk_bluemix.BmxService.BmxClient, err = setupBmxClientConfig(respBmxInfo.AuthEndpoint)
         if err != nil {
             whisk.Debug(whisk.DbgError, "setupBmxClientConfig(%s) error: %s\n", respBmxEndpoint.BmxApi, err)
             return generateBluemixAuthEndpointAccessError(err)
         }
 
         // 3. Query the Bluemix UAA endpoint for the user's Bluemix access/bearer token
-        whisk.Debug(whisk.DbgInfo, "Bluemix client baseURL: %s\n", whisk.BmxService.BmxClient.BaseURL)
-        reqAuthToken := &whisk.AuthTokenRequest{
+        whisk.Debug(whisk.DbgInfo, "Bluemix client baseURL: %s\n", whisk_bluemix.BmxService.BmxClient.BaseURL)
+        reqAuthToken := &whisk_bluemix.AuthTokenRequest{
             UserName: bmxflags.username,
             UserPassword: bmxflags.password,
             GrantType: "password",
             ResponseType: "token",
         }
-        respAuthToken, _, err := whisk.BmxService.GetBmxAuthToken(reqAuthToken)
+        respAuthToken, _, err := whisk_bluemix.BmxService.GetBmxAuthToken(reqAuthToken)
         if err != nil {
             whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxAuthToken(%s) error: %s\n", respBmxInfo.AuthEndpoint, err)
             errMsg := wski18n.T("Unable to authenticate with Bluemix: {{.err}}", map[string]interface{}{"err": err})
@@ -109,11 +111,11 @@ var bmxLoginCmd = &cobra.Command{
         whisk.Debug(whisk.DbgInfo, "Bluemix access token: %#v\n", respAuthToken)
 
         // 4. Retrieve the namespaces associated with this login
-        reqNamespaces := &whisk.BmxNamespacesRequest{
+        reqNamespaces := &whisk_bluemix.BmxNamespacesRequest{
             AccessToken: respAuthToken.AccessToken,
             RefreshToken: respAuthToken.RefreshToken,
         }
-        respBmxNamespaces, _, err := whisk.BmxService.GetBmxNamespaces(reqNamespaces)
+        respBmxNamespaces, _, err := whisk_bluemix.BmxService.GetBmxNamespaces(reqNamespaces)
         if err != nil {
             whisk.Debug(whisk.DbgError, "whisk.BmxService.GetBmxNamespaces(%s) error: %s\n", reqNamespaces, err)
             errMsg := wski18n.T("Unable to retrieve namespaces: {{.err}}", map[string]interface{}{"err": err})
@@ -124,7 +126,7 @@ var bmxLoginCmd = &cobra.Command{
         whisk.Debug(whisk.DbgInfo, "Bluemix namespaces: %#q\n", respBmxNamespaces)
 
         // 5. Prompt for which namespace to use
-        var namespace whisk.BmxNamespaceResponse
+        var namespace whisk_bluemix.BmxNamespaceResponse
         if !cmd.LocalFlags().Changed("namespace") {
             namespace = promptForNamespace(respBmxNamespaces.Namespaces)
             if len(namespace.Name) == 0 {
@@ -150,9 +152,9 @@ var bmxLoginCmd = &cobra.Command{
         newAuthKey := namespace.UUID + ":" + namespace.Key
 
         // 6. Persist this token for use by subsequent 'wsk api' commands
-        props, err := readProps(Properties.PropsFile)
+        props, err := commands.ReadProps(commands.Properties.PropsFile)
         if err != nil {
-            whisk.Debug(whisk.DbgError, "readProps(%s) failed: %s\n", Properties.PropsFile, err)
+            whisk.Debug(whisk.DbgError, "readProps(%s) failed: %s\n", commands.Properties.PropsFile, err)
             errStr := wski18n.T("Unable to save the Bluemix login access token: {{.err}}", map[string]interface{}{"err": err})
             whiskErr := whisk.MakeWskError(errors.New(errStr), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
             return whiskErr
@@ -160,9 +162,9 @@ var bmxLoginCmd = &cobra.Command{
         props["APIGW_ACCESS_TOKEN"] = respAuthToken.AccessToken
         whisk.Debug(whisk.DbgInfo, "Replacing auth key %s with %s\n", props["AUTH"], newAuthKey)
         props["AUTH"] = newAuthKey
-        err = writeProps(Properties.PropsFile, props)
+        err = commands.WriteProps(commands.Properties.PropsFile, props)
         if err != nil {
-            whisk.Debug(whisk.DbgError, "writeProps(%s, %#v) failed: %s\n", Properties.PropsFile, props, err)
+            whisk.Debug(whisk.DbgError, "writeProps(%s, %#v) failed: %s\n", commands.Properties.PropsFile, props, err)
             errStr := fmt.Sprintf(
                 wski18n.T("Unable to save the Bluemix login access token: {{.err}}",
                     map[string]interface{}{"err": err}))
@@ -185,11 +187,11 @@ var bmxLoginCmd = &cobra.Command{
  */
 func setupOpenWhiskClientConfig(cmd *cobra.Command, args []string) (error){
     // Configure a HTTP to access https://openwhisk.ng.bluemix.net based endpoints
-    baseURL, err := getURLBase(Properties.APIHost, "")  // *url.URL is in form  https://openwhisk.ng.bluemix.net
+    baseURL, err := commands.GetURLBase(commands.Properties.APIHost, "")  // *url.URL is in form  https://openwhisk.ng.bluemix.net
     if err != nil {
-        whisk.Debug(whisk.DbgError, "getURLBase(%s) error: %s\n", Properties.APIHost, err)
+        whisk.Debug(whisk.DbgError, "GetURLBase(%s) error: %s\n", commands.Properties.APIHost, err)
         errMsg := wski18n.T("Internal error. OpenWhisk API {{.api}} is invalid: {{.err}}",
-            map[string]interface{}{"api": Properties.APIHost, "err": err})
+            map[string]interface{}{"api": commands.Properties.APIHost, "err": err})
         whiskErr := whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_GENERAL,
             whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
         return whiskErr
@@ -197,8 +199,8 @@ func setupOpenWhiskClientConfig(cmd *cobra.Command, args []string) (error){
 
     clientConfig := &whisk.Config{
         BaseURL:    baseURL,
-        Insecure:   flags.global.insecure,
-        AuthToken:  Properties.Auth,
+        Insecure:   commands.Flags.Global.Insecure,
+        AuthToken:  commands.Properties.Auth,
     }
     // Setup client
     owClient, err := whisk.NewClient(http.DefaultClient, clientConfig)
@@ -209,7 +211,7 @@ func setupOpenWhiskClientConfig(cmd *cobra.Command, args []string) (error){
             whisk.DISPLAY_MSG, whisk.DISPLAY_USAGE)
         return whiskErr
     }
-    whisk.BmxService.OwClient = owClient
+    whisk_bluemix.BmxService.OwClient = owClient
 
     return nil
 }
@@ -230,7 +232,7 @@ func setupBmxClientConfig(bmxHost string) (*whisk.Client, error){
 
     clientConfig := &whisk.Config{
         BaseURL:    baseURL,
-        Insecure:   flags.global.insecure,
+        Insecure:   commands.Flags.Global.Insecure,
         AuthToken:  "cf:",
     }
 
@@ -244,7 +246,7 @@ func setupBmxClientConfig(bmxHost string) (*whisk.Client, error){
         return nil, whiskErr
     }
 
-    whisk.BmxService.BmxClient = bmxClient
+    whisk_bluemix.BmxService.BmxClient = bmxClient
 
     return bmxClient, nil
 }
@@ -267,14 +269,14 @@ func makeURL(host string) (*url.URL, error)  {
 }
 
 const maxSelections = 50
-func promptForNamespace(namespaces []whisk.BmxNamespaceResponse) (whisk.BmxNamespaceResponse) {
+func promptForNamespace(namespaces []whisk_bluemix.BmxNamespaceResponse) (whisk_bluemix.BmxNamespaceResponse) {
     index := 0
     var name string
     var err error
 
     if len(namespaces) == 0 {
         whisk.Debug(whisk.DbgWarn, "promptForNamespace: Empty namespace list")
-        return whisk.BmxNamespaceResponse{}
+        return whisk_bluemix.BmxNamespaceResponse{}
     }
 
     for (index < 1 || index > len(namespaces)) {
@@ -314,7 +316,7 @@ func init() {
         bmxLoginCmd,
     )
 
-    WskCmd.AddCommand(bmxCmd)
+    commands.WskCmd.AddCommand(bmxCmd)
 }
 
 func generateBluemixApiHostAccessError(err error) (error) {
@@ -327,4 +329,8 @@ func generateBluemixAuthEndpointAccessError(err error) (error) {
     errMsg := wski18n.T("Unable to access Bluemix authorization endpoint: {{.err}}", map[string]interface{}{"err": err})
     return whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK,
         whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
+}
+
+func BMExecute() error {
+    return commands.Execute()
 }

@@ -19,14 +19,15 @@ package whisk
 import (
     "net/http"
     "errors"
-    "../wski18n"
     "net/url"
+    "github.com/openwhisk/openwhisk-client-go/whisk"
+    "github.com/openwhisk/openwhisk-client-go/wski18n"
 )
 
 var BmxService = &BluemixService{}
 type BluemixService struct {
-    BmxClient *Client
-    OwClient *Client
+    BmxClient *whisk.Client
+    OwClient *whisk.Client
 }
 
 type BmxEndpointRequest struct {
@@ -87,20 +88,21 @@ func (s *BluemixService) GetBmxApiHost(*BmxEndpointRequest) (*BmxEndpointRespons
 
     routeUrl, err := url.Parse(route)
     if err != nil {
-        Debug(DbgError,"url.Parse(%s) error: %s\n", route, err)
+        whisk.Debug(whisk.DbgError,"url.Parse(%s) error: %s\n", route, err)
         return nil, nil, generateUrlParseError(route, err)
     }
 
-    req, err := s.OwClient.NewRequestUrl("GET", routeUrl, nil, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth)
+    req, err := s.OwClient.NewRequestUrl("GET", routeUrl, nil, whisk.DoNotIncludeNamespaceInUrl, whisk.DoNotAppendOpenWhiskPathPrefix,
+        whisk.EncodeBodyAsJson, whisk.NoAuth)
     if err != nil {
-        Debug(DbgError, "http.NewRequestUrl(GET, %s, nil, DoNotIncludeNamespaceInUrl, AppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, err)
+        whisk.Debug(whisk.DbgError, "http.NewRequestUrl(GET, %s, nil, DoNotIncludeNamespaceInUrl, AppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, err)
         return nil, nil, generateNewRequestUrlError(routeUrl, err)
     }
 
     respBmxEndpoint := new(BmxEndpointResponse)
-    resp, err := s.OwClient.Do(req, &respBmxEndpoint, ExitWithErrorOnTimeout)
+    resp, err := s.OwClient.Do(req, &respBmxEndpoint, whisk.ExitWithErrorOnTimeout)
     if err != nil {
-        Debug(DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
+        whisk.Debug(whisk.DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
         return nil, resp, err
     }
 
@@ -113,20 +115,21 @@ func (s *BluemixService) GetBmxInfo(bmxApiEndpoint string) (*BmxInfoResponse, *h
 
     routeUrl, err := url.Parse(route)
     if err != nil {
-        Debug(DbgError,"url.Parse(%s) error: %s\n", route, err)
+        whisk.Debug(whisk.DbgError,"url.Parse(%s) error: %s\n", route, err)
         return nil, nil, generateUrlParseError(route, err)
     }
 
-    req, err := s.BmxClient.NewRequestUrl("GET", routeUrl, nil, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth)
+    req, err := s.BmxClient.NewRequestUrl("GET", routeUrl, nil, whisk.DoNotIncludeNamespaceInUrl, whisk.DoNotAppendOpenWhiskPathPrefix,
+        whisk.EncodeBodyAsJson, whisk.NoAuth)
     if err != nil {
-        Debug(DbgError, "http.NewRequestUrl(GET, %s, nil, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, err)
+        whisk.Debug(whisk.DbgError, "http.NewRequestUrl(GET, %s, nil, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, err)
         return nil, nil, generateNewRequestUrlError(routeUrl, err)
     }
 
     respBmxInfo := new(BmxInfoResponse)
-    resp, err := s.BmxClient.Do(req, &respBmxInfo, ExitWithErrorOnTimeout)
+    resp, err := s.BmxClient.Do(req, &respBmxInfo, whisk.ExitWithErrorOnTimeout)
     if err != nil {
-        Debug(DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
+        whisk.Debug(whisk.DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
         return nil, resp, err
     }
 
@@ -139,7 +142,7 @@ func (s *BluemixService) GetBmxAuthToken(requestAuthToken *AuthTokenRequest) (*A
 
     routeUrl, err := url.Parse(route)
     if err != nil {
-        Debug(DbgError,"url.Parse(%s) error: %s\n", route, err)
+        whisk.Debug(whisk.DbgError,"url.Parse(%s) error: %s\n", route, err)
         return nil, nil, generateUrlParseError(route, err)
     }
 
@@ -149,16 +152,17 @@ func (s *BluemixService) GetBmxAuthToken(requestAuthToken *AuthTokenRequest) (*A
     reqAuthTokenData.Set("grant_type", requestAuthToken.GrantType)
     reqAuthTokenData.Set("response_type", requestAuthToken.ResponseType)
 
-    req, err := s.BmxClient.NewRequestUrl("POST", routeUrl, reqAuthTokenData, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsFormData, AuthRequired)
+    req, err := s.BmxClient.NewRequestUrl("POST", routeUrl, reqAuthTokenData, whisk.DoNotIncludeNamespaceInUrl,
+        whisk.DoNotAppendOpenWhiskPathPrefix, whisk.EncodeBodyAsFormData, whisk.AuthRequired)
     if err != nil {
-        Debug(DbgError, "http.NewRequestUrl(POST, %s, %+v, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsFormData, AuthRequired) error: '%s'\n", routeUrl, reqAuthTokenData, err)
+        whisk.Debug(whisk.DbgError, "http.NewRequestUrl(POST, %s, %+v, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsFormData, AuthRequired) error: '%s'\n", routeUrl, reqAuthTokenData, err)
         return nil, nil, generateNewRequestUrlError(routeUrl, err)
     }
 
     respAuthToken := new(AuthTokenResponse)
-    resp, err := s.BmxClient.Do(req, &respAuthToken, ExitWithErrorOnTimeout)
+    resp, err := s.BmxClient.Do(req, &respAuthToken, whisk.ExitWithErrorOnTimeout)
     if err != nil {
-        Debug(DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
+        whisk.Debug(whisk.DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
         return nil, resp, err
     }
 
@@ -170,20 +174,21 @@ func (s *BluemixService) GetBmxNamespaces(reqBmxNamespaces *BmxNamespacesRequest
 
     routeUrl, err := url.Parse(route)
     if err != nil {
-        Debug(DbgError,"url.Parse(%s) error: %s\n", route, err)
+        whisk.Debug(whisk.DbgError,"url.Parse(%s) error: %s\n", route, err)
         return nil, nil, generateUrlParseError(route, err)
     }
 
-    req, err := s.OwClient.NewRequestUrl("POST", routeUrl, reqBmxNamespaces, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth)
+    req, err := s.OwClient.NewRequestUrl("POST", routeUrl, reqBmxNamespaces, whisk.DoNotIncludeNamespaceInUrl,
+        whisk.DoNotAppendOpenWhiskPathPrefix, whisk.EncodeBodyAsJson, whisk.NoAuth)
     if err != nil {
-        Debug(DbgError, "http.NewRequestUrl(POST, %s, %v, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, reqBmxNamespaces, err)
+        whisk.Debug(whisk.DbgError, "http.NewRequestUrl(POST, %s, %v, DoNotIncludeNamespaceInUrl, DoNotAppendOpenWhiskPathPrefix, EncodeBodyAsJson, NoAuth) error: '%s'\n", routeUrl, reqBmxNamespaces, err)
         return nil, nil, generateNewRequestUrlError(routeUrl, err)
     }
 
     respBmxNamespaces := new(BmxNamespacesResponse)
-    resp, err := s.OwClient.Do(req, &respBmxNamespaces, ExitWithErrorOnTimeout)
+    resp, err := s.OwClient.Do(req, &respBmxNamespaces, whisk.ExitWithErrorOnTimeout)
     if err != nil {
-        Debug(DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
+        whisk.Debug(whisk.DbgError, "s.client.Do() error - HTTP req %s; error '%s'\n", req.URL.String(), err)
         return nil, resp, err
     }
 
@@ -193,12 +198,12 @@ func (s *BluemixService) GetBmxNamespaces(reqBmxNamespaces *BmxNamespacesRequest
 func generateUrlParseError(route string, err error) (error) {
     errStr := wski18n.T("Unable to parse URL '{{.route}}': {{.err}}",
         map[string]interface{}{"route": route, "err": err})
-    return MakeWskError(errors.New(errStr), EXITCODE_ERR_GENERAL, DISPLAY_MSG, NO_DISPLAY_USAGE)
+    return whisk.MakeWskError(errors.New(errStr), whisk.EXITCODE_ERR_GENERAL, whisk.DISPLAY_MSG, whisk.NO_DISPLAY_USAGE)
 }
 
 func generateNewRequestUrlError(routeUrl *url.URL, err error) (error) {
     errMsg := wski18n.T("Unable to create HTTP request for GET '{{.route}}': {{.err}}",
         map[string]interface{}{"route": routeUrl, "err": err})
-    return MakeWskErrorFromWskError(errors.New(errMsg), err, EXITCODE_ERR_NETWORK, DISPLAY_MSG,
-        NO_DISPLAY_USAGE)
+    return whisk.MakeWskErrorFromWskError(errors.New(errMsg), err, whisk.EXITCODE_ERR_NETWORK, whisk.DISPLAY_MSG,
+        whisk.NO_DISPLAY_USAGE)
 }
