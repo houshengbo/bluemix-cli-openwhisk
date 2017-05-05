@@ -1,0 +1,63 @@
+# A Travis CI configuration file.
+
+language: go
+
+matrix:
+    include:
+        - os: linux
+          sudo: required
+          go: 1.7
+          env:
+            secure: TQqtEy3VO1Rr1YxQbwkJOgYe//oPFGPypInAccp+c6t3eOfDUDC+DSaSwsc4mtMisMb+Xo1q/prHTnk+2Q6LZv48l/tVGldpg454do5FrZiir2tMzwdgEa5XLF4HOaZuqH+v7WVOp7433NJ9kCd5HVqpj/BLwwWNjFLryT1dr0mZLlICS1yk4j1E5+Bw0YSrlIJctTe672qSQ0mJPaE0XAJSaKimHvcJs+MaHxt4jzVdj8wsC8nFRL+WdJvTHC4ndCyvy+Lrcw27bzHwPR/QZe69bzdfJYMTqEVpYMV4myOH6QyYuRspyGISa4c5ZQX0p6yIOFBJmHBe3K7hYfQD39RayQs1J1KjmCVWFyCNDIILDWKiIqIf6BF06olsfhM7sLhYiP3T0URX89rQWzcu2dYTwPy0UjO9FeOZagqI7wlKF1RrCeBBseDLhy4tzUNzuhngzIUJl5+4dzWr4puYFpJOojh9yW9MJ6GLJ8mHziyi1qBAA4jGoKm/LkSn+Ee4vVIno9w+ohgExc+ZuZke4kTMn3kFVwMBbvulNAgNSEqtmpY1kKRO2a78HMEl0dRtYMLajbdn/ng6pegGWsfhLVfFRge0cZPcm9Go7WHpo1pIPd33ROA5+Gkt5iCSuLzjV21b1Mdipua9MbkP3Z0ttLsflSfeXzP86vtIy8gVR3k=
+          services: docker
+        - os: osx
+          go: 1.7
+
+git:
+  depth: 3
+
+install:
+  - export DEPLOY_BUILD_READY=false
+  - go get -u github.com/golang/lint/golint
+
+script:
+  - make lint
+  - make build
+
+after_script:
+  - make clean
+
+after_success:
+  - DEPLOY_BUILD_READY=true
+  # This tag is automatically generated for the latest merged commit in master branch.
+  - if [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_EVENT_TYPE" == "push" ] && [ "$TRAVIS_OS_NAME" == "linux" ] ; then
+      git config --global user.email "builds@travis-ci.com";
+      git config --global user.name "Travis CI";
+      export GIT_TAG="latest";
+      git tag -d $GIT_TAG;
+      git tag $GIT_TAG -a -m "Generated tag from Travis CI build $TRAVIS_BUILD_NUMBER";
+      git push -f -q https://$API_TOKEN@github.com/IBM-Bluemix/bluemix-cli-openwhisk $GIT_TAG;
+    fi
+
+before_deploy:
+  - go get github.com/inconshreveable/mousetrap
+  - go get github.com/mattn/go-isatty
+  - export build_file_name=wsk
+  - export zip_file_name=Bluemix_CLI_OpenWhisk
+  - chmod +x tools/travis/build_tag_releases.sh
+  - ./tools/travis/build_tag_releases.sh $build_file_name $zip_file_name
+  - export RELEASE_PKG_FILE=$(ls $zip_file_name-*.zip)
+  - echo "Deploying $RELEASE_PKG_FILE to GitHub releases."
+
+deploy:
+  provider: releases
+  api_key:
+    secure: Be7lXanl/Ek/6K74RodADOZXmNH83gtqyY4Xwi6G5ZJkA12/njW4Hev4jMDtfi0o7Y+j9biSkXes/1u35u543yv1kUvIxZEioA+igoRmtIGJfaVmfIymggC7fMJ3Ta14AelKE/La8v91WR5Z1UU0HJYXhuEYc5v/XYg6bkB1iBAo9ZPrdYJk5f/zH4nD0SQHlEnFB4MePR4a6RDeQiI+tUooygWUvk1rFi0VYmOD68kU3AQ3bAWchhrbrGbLUgrMMloPhCaQ0crGhkbZizIsXQk7rOcf7PWzKpoxCsoKZ030HJDHKBM9qm/0sQLXvQHZJAi+vmBNWW8drJa7/XBp5AnU70LuIGUFI480HAP5kBlciRQLCoHehtTeZd2nDliJc4hU5YK+hQOLJZ3JvKm1Z36dWJ8Uw4S8F6m0U0T1lNwZf+u9bkkfW66ovaONdK8J2sr0RkHKXLCt0JEH9UkblyCjykujtcImdh7dKXKlhKPoEuPcguateK9H0yujWJ+yDDYmxWdqDibE+FDFEWjzTPmhRWg+Ew/AMkuapHVyjI9g0Sg+93hbGQ+OFr41DmJdpyhN0UFK0h0nbEv6b1sLmMdARLMEGVwYsC3qNUqGpkQcZTTsm8uwWd4UbW61aCXcGsgbxttpaTLXmPGxKo6rvb1Geo+xC4IS0vMlnfzGaPc=
+  file_glob: true
+  file: ${zip_file_name}-*.zip
+  overwrite: true
+  skip_cleanup: true
+  on:
+    repo: IBM-Bluemix/bluemix-cli-openwhisk
+    tags: true
+    condition: "$DEPLOY_BUILD_READY = true"
