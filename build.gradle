@@ -1,59 +1,93 @@
-import groovy.json.*
+ext.dockerImageName = "cli"
+ext.dockerContainerName = "cli"
+ext.dockerBuildArgs = getDockerBuildArgs()
+apply from: 'gradle/docker.gradle'
 
-def openPath = System.getenv("OPENWHISK_HOME") ?: '../../../../open'
-def openCLIBasePath = "${openPath}/tools/cli"
-def langResBackUp = "${openCLIBasePath}/go-whisk-cli/wski18n/resources/en_US.all.json.bk"
-def langResOrig = "${openCLIBasePath}/go-whisk-cli/wski18n/resources/en_US.all.json"
 
-task distDocker(type: GradleBuild) {
-    buildFile = "${openCLIBasePath}/build.gradle"
-    tasks = ['distDocker']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
+task removeBinary(type: Delete) {
+    delete "${projectDir}/bin/wsk"
+    delete "${projectDir}/bin/mac"
+    delete "${projectDir}/bin/linux"
+    delete "${projectDir}/bin/windows"
 }
 
-task tagImage(type: GradleBuild) {
-    buildFile = "${openCLIBasePath}/build.gradle"
-    tasks = ['tagImage']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-}
+task distBinary(dependsOn: [removeBinary, distDocker]) {
+    doLast {
+        run(dockerBinary + ["rm", "-f", dockerContainerName], true)
+        run(dockerBinary + ["run", "--name", dockerContainerName, dockerTaggedImageName])
 
-task pushImage(type: GradleBuild) {
-    buildFile = "${openCLIBasePath}/build.gradle"
-    tasks = ['pushImage']
-    startParameter.projectProperties = gradle.startParameter.projectProperties
-}
+        // Copy all Go binaries from Docker into openwhisk/bin folder
+        run(dockerBinary + ["cp", dockerContainerName +
+                ":/src/github.com/IBM-Bluemix/bluemix-cli-openwhisk/build/.", "${projectDir}/bin"])
 
-distDocker.doLast {
-    file(langResBackUp).renameTo(file(langResOrig))
-    file("${openCLIBasePath}/go-whisk-cli/commands/bmx.go").delete()
-    file("${openCLIBasePath}/go-whisk/whisk/bmx.go").delete()
-}
-
-task copyGoSource(type: Copy) {
-    include '**/*.go'
-    from projectDir
-    into openCLIBasePath
-}
-
-task mergeExternalizedStrings() {
-    file(langResOrig).renameTo(file(langResBackUp))
-
-    def openJSONFile = file(langResBackUp)
-    def mergedJSONFile = file(langResOrig)
-    def blueJSONFile = file("${projectDir}/go-whisk-cli/wski18n/resources/en_US.all.json")
-    def openJSON = new JsonSlurper().parseText(openJSONFile.text)
-    def blueJSON = new JsonSlurper().parseText(blueJSONFile.text)
-
-    blueJSON.each {
-        value -> openJSON << value
-    }
-
-    def mergedJSON = new JsonBuilder(openJSON).toPrettyString()
-
-    mergedJSONFile.withWriter('UTF-8') {
-        it << mergedJSON
+        run(dockerBinary + ["rm", "-f", dockerContainerName])
     }
 }
 
-distDocker.dependsOn mergeExternalizedStrings
-distDocker.dependsOn copyGoSource
+task dumpOSInfo {
+    doLast {
+        println "os.name = "+getOsName()
+        println "os.arch = "+getOsArch()
+        println "go.name = "+mapOsNameToGoName(getOsName())
+        println "go.arch = "+mapOsArchToGoArch(getOsArch())
+    }
+}
+
+task copyCLIShortcut(type: Copy, dependsOn: [distBinary, dumpOSInfo]) {
+    String go_osname     = mapOsNameToGoName(getOsName())
+    String go_osarch     = mapOsArchToGoArch(getOsArch())
+    String from_path_wsk = "${projectDir}/bin/${go_osname}/${go_osarch}/wsk"
+    String to_path_dir   = "${projectDir}/bin"
+
+    from from_path_wsk
+    into to_path_dir
+}
+
+pushImage.finalizedBy copyCLIShortcut
+
+// Returns the Go CLI docker build args
+def getDockerBuildArgs() {
+    String local_os = mapOsNameToGoName(getOsName())
+    String local_arch = mapOsArchToGoArch(getOsArch())
+    def res = []
+
+    if(!project.hasProperty('crossCompileCLI') || project.crossCompileCLI == "false") {
+        res = ["CLI_OS=${local_os}", "CLI_ARCH=${local_arch}"]
+    } else {
+        res = ["CLI_OS=mac linux windows", "CLI_ARCH=386 amd64"]
+    }
+
+    return res
+}
+
+def run(cmd, ignoreError = false) {
+    println("Executing '${cmd.join(" ")}'")
+    def proc = cmd.execute()
+    proc.waitFor()
+    if(!ignoreError && proc.exitValue() != 0) {
+        println("Command '${cmd.join(" ")}' failed with exitCode ${proc.exitValue()}")
+    }
+}
+
+def getOsName() {
+    return System.properties['os.name']
+}
+
+def getOsArch() {
+    return System.properties['os.arch']
+}
+
+def mapOsNameToGoName(String osname) {
+    String osname_l = osname.toLowerCase()
+    if (osname_l.contains("nux") || osname.contains("nix")) return "linux"
+    if (osname_l.contains("mac")) return "mac"
+    if (osname_l.contains("windows")) return "windows"
+    return osname_l
+}
+
+def mapOsArchToGoArch(String osarch) {
+    String osarch_l = osarch.toLowerCase()
+    if (osarch_l.contains("x86_64") || osarch_l == "amd64") return "amd64"
+    if (osarch_l.contains("i386") || osarch_l.contains("x86_32")) return "386"
+    return osarch_l
+}
