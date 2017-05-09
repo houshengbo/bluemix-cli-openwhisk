@@ -75,19 +75,19 @@
     },
     {
       "ImportPath": "github.com/openwhisk/openwhisk-client-go/whisk",
-      "Rev": "5c216065673c15e35e0baa8feca9b986a6b73517"
+      "Rev": "62ddca28397566aaa46ac06484d79bd6da74011f"
     },
     {
       "ImportPath": "github.com/openwhisk/openwhisk-client-go/wski18n",
-      "Rev": "5c216065673c15e35e0baa8feca9b986a6b73517"
+      "Rev": "62ddca28397566aaa46ac06484d79bd6da74011f"
     },
     {
       "ImportPath": "github.com/openwhisk/openwhisk-cli/commands",
-      "Rev": "7ec0660407730622c8a6d5c9d966d622cea3943e"
+      "Rev": "a3447bf2550a97dc828c401acf5f51b4f24f1dc9"
     },
     {
       "ImportPath": "github.com/openwhisk/openwhisk-cli/wski18n",
-      "Rev": "7ec0660407730622c8a6d5c9d966d622cea3943e"
+      "Rev": "a3447bf2550a97dc828c401acf5f51b4f24f1dc9"
     }
   ]
 }
