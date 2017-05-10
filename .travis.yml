@@ -46,7 +46,7 @@ before_deploy:
   - export zip_file_name=Bluemix_CLI_OpenWhisk
   - chmod +x tools/travis/build_tag_releases.sh
   - ./tools/travis/build_tag_releases.sh $build_file_name $zip_file_name
-  - export RELEASE_PKG_FILE=$(ls $zip_file_name-*.zip)
+  - export RELEASE_PKG_FILE=$(ls $zip_file_name-*.*)
   - echo "Deploying $RELEASE_PKG_FILE to GitHub releases."
 
 deploy:
@@ -54,7 +54,7 @@ deploy:
   api_key:
     secure: Be7lXanl/Ek/6K74RodADOZXmNH83gtqyY4Xwi6G5ZJkA12/njW4Hev4jMDtfi0o7Y+j9biSkXes/1u35u543yv1kUvIxZEioA+igoRmtIGJfaVmfIymggC7fMJ3Ta14AelKE/La8v91WR5Z1UU0HJYXhuEYc5v/XYg6bkB1iBAo9ZPrdYJk5f/zH4nD0SQHlEnFB4MePR4a6RDeQiI+tUooygWUvk1rFi0VYmOD68kU3AQ3bAWchhrbrGbLUgrMMloPhCaQ0crGhkbZizIsXQk7rOcf7PWzKpoxCsoKZ030HJDHKBM9qm/0sQLXvQHZJAi+vmBNWW8drJa7/XBp5AnU70LuIGUFI480HAP5kBlciRQLCoHehtTeZd2nDliJc4hU5YK+hQOLJZ3JvKm1Z36dWJ8Uw4S8F6m0U0T1lNwZf+u9bkkfW66ovaONdK8J2sr0RkHKXLCt0JEH9UkblyCjykujtcImdh7dKXKlhKPoEuPcguateK9H0yujWJ+yDDYmxWdqDibE+FDFEWjzTPmhRWg+Ew/AMkuapHVyjI9g0Sg+93hbGQ+OFr41DmJdpyhN0UFK0h0nbEv6b1sLmMdARLMEGVwYsC3qNUqGpkQcZTTsm8uwWd4UbW61aCXcGsgbxttpaTLXmPGxKo6rvb1Geo+xC4IS0vMlnfzGaPc=
   file_glob: true
-  file: ${zip_file_name}-*.zip
+  file: ${zip_file_name}-*.*
   overwrite: true
   skip_cleanup: true
   on:
